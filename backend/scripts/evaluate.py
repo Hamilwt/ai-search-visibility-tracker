@@ -87,16 +87,12 @@ async def evaluate(labels_path: str) -> str:
                 ).all()
                 citations = (
                     await conn.execute(
-                        select(Citation.url).where(
-                            Citation.response_id == response_id
-                        )
+                        select(Citation.url).where(Citation.response_id == response_id)
                     )
                 ).all()
                 expected_brands = dict(parse_brand_labels(row["expected_brands"]))
                 predicted_brands = {name.casefold(): rank for name, rank in mentions}
-                brand_counts = score_sets(
-                    set(predicted_brands), set(expected_brands)
-                )
+                brand_counts = score_sets(set(predicted_brands), set(expected_brands))
                 brand_total += brand_counts
                 for name in set(predicted_brands) & set(expected_brands):
                     if expected_brands[name] is not None:
