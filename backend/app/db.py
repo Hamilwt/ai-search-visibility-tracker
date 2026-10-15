@@ -50,6 +50,15 @@ def get_database_url() -> str:
     return normalize_database_url(os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL))
 
 
+def resolve_migration_url() -> str:
+    """Direct (non-pooled) URL when set; pooled URLs go through PgBouncer,
+    which rejects the session-level statements migrations may need."""
+    direct = os.getenv("DIRECT_DATABASE_URL")
+    if direct:
+        return normalize_database_url(direct)
+    return get_database_url()
+
+
 engine: AsyncEngine | None = None
 SessionLocal = async_sessionmaker(expire_on_commit=False)
 

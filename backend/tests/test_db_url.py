@@ -1,6 +1,6 @@
 """URL normaliser tests: pure string transforms, no database."""
 
-from app.db import get_database_url, normalize_database_url
+from app.db import get_database_url, normalize_database_url, resolve_migration_url
 
 
 def test_postgresql_scheme_gains_asyncpg_dialect() -> None:
@@ -38,3 +38,15 @@ def test_get_database_url_normalises_env(monkeypatch) -> None:  # noqa: ANN001
         "DATABASE_URL", "postgresql://u:p@host/db?sslmode=require&channel_binding=require"
     )
     assert get_database_url() == "postgresql+asyncpg://u:p@host/db?sslmode=require"
+
+
+def test_resolve_migration_url_prefers_direct(monkeypatch) -> None:  # noqa: ANN001
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@pooler/db?sslmode=require")
+    monkeypatch.setenv("DIRECT_DATABASE_URL", "postgresql://u:p@direct/db")
+    assert resolve_migration_url() == "postgresql+asyncpg://u:p@direct/db"
+
+
+def test_resolve_migration_url_falls_back(monkeypatch) -> None:  # noqa: ANN001
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@pooler/db?sslmode=require")
+    monkeypatch.delenv("DIRECT_DATABASE_URL", raising=False)
+    assert resolve_migration_url() == "postgresql+asyncpg://u:p@pooler/db?sslmode=require"
