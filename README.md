@@ -1,81 +1,88 @@
 # AI Search Visibility Tracker
 
-Shows how often AI search engines mention or cite a brand versus its competitors.
+Customers increasingly discover products through AI answers, not search-result
+pages — and brands have no idea when those answers stop recommending them.
+This tracker measures exactly that: give it a brand, its competitors, and a
+set of prompts, and it records how often AI models mention or cite each brand,
+turning the results into a share-of-voice dashboard over time. When visibility
+drops, a daily ops workflow writes the alert for you.
 
-## Stack
+## Tech stack
 
-- Backend: Python 3.12+, FastAPI (async), Pydantic v2
-- Database: PostgreSQL (SQLAlchemy 2.0 async + Alembic, from Phase 1)
-- Frontend: Next.js (App Router) + TypeScript + Recharts (from Phase 6)
-- LLM: Gemini (primary) + OpenAI-compatible provider (from Phase 2)
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js 15 (App Router) + TypeScript + Tailwind CSS + Recharts |
+| Backend | Python 3.12+, FastAPI (async), Pydantic v2 |
+| Database | PostgreSQL (SQLAlchemy 2.0 async + Alembic) |
+| Agentic extraction | LangGraph reflection loop (extract → validate → fix) |
+| Ops automation | Self-hosted n8n daily alert workflow |
+| Observability | Langfuse tracing on every LLM call |
+| LLM providers | Gemini (primary, free tier) + OpenAI-compatible endpoints |
 
-## Local development
+## Agentic architecture
+
+**Extraction reflection loop.** Every model answer passes through a LangGraph
+workflow instead of a single parse call: an `extract` node produces JSON, a
+`validate` node checks it strictly with Pydantic, and a conditional edge loops
+back to a `fix` node carrying the exact validation error (initial attempt +
+2 fixes, then a defined `failed_extraction` row — never a crash). Server-side
+rules the model can't corrupt: `is_target_brand` is computed, not extracted,
+and citation domains are normalized locally. Full diagram and node reference:
+[docs/langgraph_architecture.md](docs/langgraph_architecture.md).
+
+**Ops alert workflow.** A versioned n8n workflow (`ops/kuku_alert_workflow.json`)
+runs daily: cron trigger → `GET /brands/{id}/share-of-voice` → a Code node
+reducing the trend to facts (latest share, delta vs previous run, top
+competitor) → an LLM node writing a 2-sentence Slack alert → Slack. Import it
+via the n8n UI and connect your own keys; see the
+[ops section](#ops-automation-n8n) below.
+
+## Key endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | Health check |
+| `GET` | `/brands` | Brand list (id + name) |
+| `POST` | `/runs` | Start a run (202 + background execution) |
+| `GET` | `/runs` | Run list, latest first (`?brand_id=`, `?limit=`) |
+| `GET` | `/runs/{id}` | Run status with extracted responses/mentions |
+| `GET` | `/brands/{id}/share-of-voice?days=` | Per-run visibility points, 0–100 share |
+
+All errors share one envelope: `{"error": {"code", "message", "details"}}`.
+
+## Screenshots
+
+![Runs list](docs/screenshots/runs-list.png)
+![New run form](docs/screenshots/new-run-form.png)
+![Brand dashboard](docs/screenshots/brand-dashboard.png)
+
+## Quickstart (local development)
+
+Prerequisites: Docker, Python 3.12+, Node 22+.
 
 ```powershell
 Copy-Item .env.example .env
+# Fill in LLM keys in .env, then generate the n8n key:
+# (a random 64-hex-char string for N8N_ENCRYPTION_KEY)
 docker compose up -d db
 cd backend
 ..\.venv\Scripts\Activate.ps1
-uvicorn app.main:app --reload
+pip install ".[test]"
+alembic upgrade head
+uvicorn app.main:app --reload   # backend on http://localhost:8000
 ```
 
-Health check: `GET http://localhost:8000/health` returns `{"status": "ok"}`.
+Frontend (new terminal):
 
-Frontend: `cd frontend`, create `.env.local` with
-`NEXT_PUBLIC_API_URL=http://localhost:8000`, then `npm install` and
-`npm run dev` (opens `http://localhost:3000`).
+```powershell
+cd frontend
+# create .env.local with: NEXT_PUBLIC_API_URL=http://localhost:8000
+npm install
+npm run dev                    # UI on http://localhost:3000
+```
 
-## Ops automation (n8n)
-
-`docker compose up -d n8n` starts self-hosted n8n at `http://localhost:5678`
-(first run creates the owner account in the browser; data persists in the
-`n8n_data` volume). The daily visibility-alert workflow lives in
-`ops/kuku_alert_workflow.json`: cron trigger → `GET /brands/{id}/share-of-voice`
-→ Code node summarizing the trend → LLM node writing a 2-sentence alert →
-Slack node.
-
-### Importing the workflow (click-by-click)
-
-1. Open `http://localhost:5678` and finish the setup account screen.
-2. Click **Workflows** in the left sidebar, then the **…** menu (top right) →
-   **Import from File**.
-3. Choose `ops/kuku_alert_workflow.json` from this repo and confirm. The
-   canvas shows: Daily schedule → Fetch share of voice → Summarize trend →
-   Write alert → Post to Slack (with the OpenAI model attached below the chain).
-4. Set the two env inputs: in Docker they come from your `.env`
-   (`API_BASE_URL`, `VISIBILITY_BRAND_ID`) and are readable in expressions as
-   `$env.API_BASE_URL` / `$env.VISIBILITY_BRAND_ID`.
-5. Connect credentials: open the **OpenAI model** node → **Create new
-   credential** → paste your key; open **Post to Slack** → create new
-   credential → paste your Slack OAuth token and pick `#visibility-alerts`.
-6. Click **Execute workflow** (manual test run first), inspect each node's
-   input/output, then flip the **Active** toggle so the cron schedule owns it.
-
-## Deployment (free tier, no credit card)
-
-Live URLs live here once deployed:
-- Backend: _pending_
-- Frontend: _pending_
-
-### Backend on Render + Postgres on Neon
-
-1. Create a free project at neon.tech → **Create database** → copy the
-   **pooled** connection string. Change its scheme to
-   `postgresql+asyncpg://` and keep `?sslmode=require` so asyncpg connects.
-2. In the Render dashboard: **New → Blueprint**, point it at this repo.
-   Render reads `render.yaml` (backend web service, free plan).
-3. Fill the `sync: false` secrets, most importantly `DATABASE_URL` with the
-   Neon string from step 1, plus your `GEMINI_*`/`OPENAI_*` keys.
-4. Deploy. `preDeployCommand` runs `alembic upgrade head` automatically;
-   `GET /health` is the health check.
-
-### Frontend on Vercel
-
-1. Import this repo in Vercel. When prompted, set the **Root Directory** to
-   `frontend` (Vercel then auto-detects Next.js — no config file needed).
-2. Add the environment variable
-   `NEXT_PUBLIC_API_URL=https://<your-render-backend>.onrender.com`.
-3. Deploy and paste both URLs above.
+Click through: runs list (empty state first) → New run → back to the list →
+brand dashboard chart.
 
 ## Tests
 
@@ -87,8 +94,50 @@ ruff format --check .
 pytest -q
 ```
 
+Frontend: `cd frontend`, then `npm run lint` and `npm run build`.
+
+## Evaluation
+
+Accuracy is measured, not asserted: `backend/scripts/export_for_labels.py`
+dumps stored responses to CSV, you hand-label brands/URLs, and
+`backend/scripts/evaluate.py` prints micro-averaged precision/recall plus
+rank-match rate. Latest numbers: [docs/METRICS.md](docs/METRICS.md)
+(currently awaiting the first labeled run — see the workflow in
+[docs/DECISIONS.md](docs/DECISIONS.md)).
+
+## Ops automation (n8n)
+
+`docker compose up -d n8n` starts self-hosted n8n at `http://localhost:5678`
+(data persists in the `n8n_data` volume). Import `ops/kuku_alert_workflow.json`
+via **Workflows → … → Import from File**, set `API_BASE_URL` /
+`VISIBILITY_BRAND_ID` in `.env`, connect your OpenAI and Slack credentials on
+the respective nodes, **Execute workflow** once to verify, then flip the
+**Active** toggle.
+
+## Deployment (free tier, no credit card)
+
+Live URLs live here once deployed:
+- Backend: _pending_
+- Frontend: _pending_
+
+- **Backend → Render:** New → Blueprint from this repo (`render.yaml`: free web
+  service, `alembic upgrade head` pre-deploy, `/health` check). Fill secrets in
+  the dashboard, starting with `DATABASE_URL`.
+- **Database → Neon:** free project at neon.tech; use the **pooled** URL with
+  scheme `postgresql+asyncpg://` and `?sslmode=require`.
+- **Frontend → Vercel:** import the repo with **Root Directory** `frontend`,
+  set `NEXT_PUBLIC_API_URL` to the Render backend URL, deploy.
+
+## Known limitations
+
+- No authentication or multi-tenancy (single-operator local design).
+- Sentiment is extracted but not scored in evaluation.
+- Share-of-voice is per-run points; no interpolated daily buckets.
+- Render free services sleep when idle; Neon free tier has usage caps.
+
 ## Docs
 
-- `docs/DECISIONS.md` — architecture decisions (one entry per non-obvious choice)
-- `docs/DEBUG_LOG.md` — real bugs hit during development
-- `docs/METRICS.md` — script-measured numbers with exact commands
+- [docs/langgraph_architecture.md](docs/langgraph_architecture.md) — agent diagram
+- [docs/METRICS.md](docs/METRICS.md) — script-measured numbers with commands
+- [docs/DECISIONS.md](docs/DECISIONS.md) — architecture decisions
+- [docs/DEBUG_LOG.md](docs/DEBUG_LOG.md) — real bugs hit during development
