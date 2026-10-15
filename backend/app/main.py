@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 
-app = FastAPI(title="AI Search Visibility Tracker")
+from app.db import lifespan
+
+app = FastAPI(title="AI Search Visibility Tracker", lifespan=lifespan)
 
 
 @app.get("/health")
