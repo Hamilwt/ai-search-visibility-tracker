@@ -19,7 +19,30 @@ def _envelope(code: str, message: str, details: dict | None = None) -> dict:
     ).model_dump()
 
 
+class RateLimited(HTTPException):
+    """429 with a machine-readable code; rendered inside the error envelope."""
+
+    def __init__(self, code: str, message: str, retry_after: float | None = None) -> None:
+        super().__init__(status_code=429, detail=message)
+        self.code = code
+        self.retry_after = retry_after
+
+
 async def _http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    if isinstance(exc, RateLimited):
+        details = (
+            {"retry_after_seconds": round(exc.retry_after, 1)}
+            if exc.retry_after is not None
+            else None
+        )
+        headers = (
+            {"Retry-After": str(int(exc.retry_after))} if exc.retry_after is not None else None
+        )
+        return JSONResponse(
+            status_code=429,
+            content=_envelope(exc.code, str(exc.detail), details),
+            headers=headers,
+        )
     codes = {400: "bad_request", 404: "not_found", 409: "conflict"}
     return JSONResponse(
         status_code=exc.status_code,

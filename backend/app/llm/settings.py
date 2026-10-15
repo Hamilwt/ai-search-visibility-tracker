@@ -18,6 +18,8 @@ class LLMSettings(BaseSettings):
     openai_model: str = ""
     llm_timeout_s: float = 60.0
     max_concurrent_llm_calls: int = 5
+    max_prompts_per_run: int = 10
+    max_runs_per_hour_per_ip: int = 5
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
     langfuse_host: str | None = None
