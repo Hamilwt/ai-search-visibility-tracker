@@ -62,9 +62,32 @@ alembic upgrade head
 uvicorn app.main:app --reload   # backend on http://localhost:8000
 ```
 
+macOS/Linux equivalent:
+
+```bash
+cp .env.example .env
+# Fill in LLM keys in .env, then:
+docker compose up -d db
+cd backend
+source ../.venv/bin/activate
+pip install ".[test]"
+alembic upgrade head
+uvicorn app.main:app --reload   # backend on http://localhost:8000
+```
+
 Frontend (new terminal):
 
 ```powershell
+cd frontend
+# create .env.local with: NEXT_PUBLIC_API_URL=http://localhost:8000
+npm install
+npm run dev                    # UI on http://localhost:3000
+```
+
+macOS/Linux equivalent (same commands; only the `.env.local` step differs in
+how you create the file):
+
+```bash
 cd frontend
 # create .env.local with: NEXT_PUBLIC_API_URL=http://localhost:8000
 npm install
