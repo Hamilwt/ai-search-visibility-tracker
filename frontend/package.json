@@ -1,0 +1,11 @@
+{
+  "name": "ai-search-visibility-tracker-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Frontend placeholder. Full Next.js App Router + TypeScript + Recharts app lands in Phase 6.",
+  "scripts": {
+    "dev": "echo \"frontend placeholder: Next.js app lands in Phase 6\"",
+    "build": "echo \"frontend placeholder: Next.js app lands in Phase 6\"",
+    "lint": "echo \"frontend placeholder: Next.js app lands in Phase 6\""
+  }
+}
