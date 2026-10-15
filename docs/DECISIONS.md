@@ -64,3 +64,10 @@ One short entry per non-obvious architectural decision: context, choice, alterna
 1. Backend: `docker compose up -d db`, `cd backend`, `..\.venv\Scripts\Activate.ps1`, `uvicorn app.main:app --reload` (port 8000).
 2. Frontend: `cd frontend`, create `.env.local` with `NEXT_PUBLIC_API_URL=http://localhost:8000`, `npm install`, `npm run dev`, open `http://localhost:3000`.
 3. Click through: runs list (empty state first) → New run → back to list → brand dashboard chart.
+
+## 7. Phase 7 deploy + ops: Render backend, Neon Postgres, local n8n, JSON workflow
+
+- Context: portfolio needs live URLs (free, no credit card) plus demonstrable ops automation for an AI & Ops role.
+- Choice: Render free web service from `render.yaml` (migrations via `preDeployCommand`, `/health` check) with the database on Neon (pooled URL, `sslmode=require`) instead of Render Postgres (90-day deletion risk); n8n self-hosted beside Postgres with default SQLite storage; workflow as versioned JSON using `$env` inputs so one file works on any machine; Vercel by dashboard instructions (auto-detects Next.js, no config file to drift).
+- Alternatives: Render Postgres (rejected: expiry risk); n8n on our Postgres (rejected: couples ops tooling to product DB); `vercel.json` (rejected: duplicates dashboard settings).
+- Consequences: `docker compose up -d n8n` + UI import is the whole local ops demo; live URLs get pasted into the README after first deploy.
