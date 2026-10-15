@@ -22,3 +22,10 @@ Log every real bug or failure hit during development: symptom, log/trace evidenc
 - Root cause: `alembic downgrade base` removes all schema tables and version rows, but Alembic's own `alembic_version` bookkeeping table itself remains.
 - Fix: assert the remaining tables equal `{"alembic_version"}` with a comment explaining why.
 - Prevention: none needed beyond knowing downgrade never drops the version table.
+
+## 4. CI install from `pyproject.toml` failed: setuptools flat-layout discovery
+
+- Symptom: `pip install "./backend[test]"` failed with `error: Multiple top-level packages discovered in a flat-layout: ['app', 'alembic']`.
+- Root cause: setuptools auto-discovery treated the `alembic/` migrations directory as a distributable package alongside `app/`.
+- Fix: added `[tool.setuptools.packages.find] include = ["app*"]` to `backend/pyproject.toml` so only the app is packaged; migrations stay as scripts.
+- Prevention: dry-run `pip install --dry-run "./backend[test]"` locally before changing the CI install step.
