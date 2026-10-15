@@ -1,8 +1,10 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.errors import RateLimited
+from app.api.rate_limit import check_rate_limit, client_ip
 from app.api.schemas import (
     CitationOut,
     MentionOut,
@@ -13,6 +15,7 @@ from app.api.schemas import (
     RunSummaryOut,
 )
 from app.db import get_session
+from app.llm.settings import get_settings
 from app.models.brand import Brand, Prompt
 from app.models.run import Response, Run
 from app.services.pipeline import execute_run
@@ -75,8 +78,22 @@ async def _upsert_prompts(session: AsyncSession, brand_id: int, queries: list[st
 async def create_run(
     request: RunCreateRequest,
     background_tasks: BackgroundTasks,
+    http_request: Request,
     session: AsyncSession = Depends(get_session),
 ) -> RunCreateResponse:
+    settings = get_settings()
+    if len(request.prompts) > settings.max_prompts_per_run:
+        raise RateLimited(
+            "prompt_limit_exceeded",
+            f"At most {settings.max_prompts_per_run} prompts per run",
+        )
+    retry_after = check_rate_limit(client_ip(http_request), settings.max_runs_per_hour_per_ip)
+    if retry_after is not None:
+        raise RateLimited(
+            "rate_limited",
+            f"At most {settings.max_runs_per_hour_per_ip} runs per hour",
+            retry_after,
+        )
     brand = await session.get(Brand, request.brand_id)
     if brand is None:
         raise HTTPException(status_code=404, detail=f"Brand {request.brand_id} not found")

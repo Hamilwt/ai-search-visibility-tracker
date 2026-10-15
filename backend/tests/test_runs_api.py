@@ -9,6 +9,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from alembic import command
+from app.api.rate_limit import reset_rate_limits
 from app.api.schemas import RunCreateResponse, RunDetailOut
 from app.db import SessionLocal, get_session
 from app.llm.base import BaseLLMProvider, LLMResult
@@ -145,6 +146,44 @@ async def test_post_runs_reuses_prompts(client, monkeypatch) -> None:
     first_prompts = [r["prompt_id"] for r in (await wait_for_run(http, first))["responses"]]
     second_prompts = [r["prompt_id"] for r in (await wait_for_run(http, second))["responses"]]
     assert first_prompts == second_prompts  # upserted, not duplicated
+
+
+@pytest.fixture(autouse=True)
+def _clean_rate_limits():
+    reset_rate_limits()
+    yield
+    reset_rate_limits()
+
+
+async def test_prompts_cap_returns_429(client, monkeypatch) -> None:
+    http, factory = client
+    monkeypatch.setenv("MAX_PROMPTS_PER_RUN", "10")
+    brand_id = await seed_brand(factory)
+    response = await http.post(
+        "/runs",
+        json={"brand_id": brand_id, "prompts": [f"q{i}" for i in range(11)]},
+    )
+    assert response.status_code == 429
+    assert response.json()["error"]["code"] == "prompt_limit_exceeded"
+
+
+async def test_rate_limit_per_ip(client, monkeypatch) -> None:
+    http, factory = client
+    monkeypatch.setenv("MAX_RUNS_PER_HOUR_PER_IP", "5")
+    brand_id = await seed_brand(factory)
+    script(monkeypatch, ["a", extraction_json()] * 6)
+    payload = {"brand_id": brand_id, "prompts": ["best widgets?"]}
+    for _ in range(5):
+        response = await http.post("/runs", json=payload, headers={"X-Forwarded-For": "10.0.0.1"})
+        assert response.status_code == 202
+    limited = await http.post("/runs", json=payload, headers={"X-Forwarded-For": "10.0.0.1"})
+    assert limited.status_code == 429
+    body = limited.json()
+    assert body["error"]["code"] == "rate_limited"
+    assert "retry_after_seconds" in body["error"]["details"]
+    assert "Retry-After" in limited.headers
+    other_ip = await http.post("/runs", json=payload, headers={"X-Forwarded-For": "10.0.0.2"})
+    assert other_ip.status_code == 202
 
 
 async def test_post_runs_unknown_brand_is_enveloped_404(client) -> None:

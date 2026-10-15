@@ -1,5 +1,4 @@
 import asyncio
-import os
 from logging.config import fileConfig
 
 from sqlalchemy import pool
@@ -9,6 +8,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 import app.models.brand  # noqa: F401  (registers tables on Base.metadata)
 import app.models.run  # noqa: F401  (registers tables on Base.metadata)
 from alembic import context
+from app.db import resolve_migration_url
 from app.models import Base
 
 config = context.config
@@ -17,9 +17,9 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Never bake the DB URL into alembic.ini; read it from the environment.
-database_url = os.getenv("DATABASE_URL")
-if database_url:
-    config.set_main_option("sqlalchemy.url", database_url)
+# DIRECT_DATABASE_URL (Neon direct URL) wins when set; see resolve_migration_url.
+database_url = resolve_migration_url()
+config.set_main_option("sqlalchemy.url", database_url)
 
 target_metadata = Base.metadata
 
