@@ -67,6 +67,10 @@ One short entry per non-obvious architectural decision: context, choice, alterna
 
 ## 7. Phase 7 deploy + ops: Render backend, Neon Postgres, local n8n, JSON workflow
 
+> SUPERSEDED by entry 8 (repo-polish): the n8n alert workflow and its compose
+> service were removed to keep scope on the core product. Render + Neon +
+> Vercel choices below still stand.
+
 - Context: portfolio needs live URLs (free, no credit card) plus demonstrable ops automation for an AI & Ops role.
 - Choice: Render free web service from `render.yaml` (migrations via `preDeployCommand`, `/health` check) with the database on Neon (pooled URL, `sslmode=require`) instead of Render Postgres (90-day deletion risk); n8n self-hosted beside Postgres with default SQLite storage; workflow as versioned JSON using `$env` inputs so one file works on any machine; Vercel by dashboard instructions (auto-detects Next.js, no config file to drift).
 - Alternatives: Render Postgres (rejected: expiry risk); n8n on our Postgres (rejected: couples ops tooling to product DB); `vercel.json` (rejected: duplicates dashboard settings).
@@ -78,3 +82,17 @@ One short entry per non-obvious architectural decision: context, choice, alterna
 - Choice: `StateGraph` with `TypedDict` blackboard (`raw_attempt`, `attempts`, `validation_error`, `result`); three nodes reusing v1's templates and `_parse` verbatim (no duplicated validation); conditional edge `validate → END | fix` with budget initial + 2 fixes; v2 ON by default behind `USE_EXTRACTION_V2=0` opt-out; mermaid diagram generated from the compiled graph by a checked-in script.
 - Alternatives: LangChain `LLMChain` + manual loop (rejected: control flow hidden in Python, nothing to visualize); separate v2 pipeline module (rejected: duplicated DB logic); v1 default with v2 opt-in (rejected: the point of the phase is showcasing the agent).
 - Consequences: every extraction is now traceable as extract → validate → fix hops; existing tests parametrized over v1/v2 prove identical stored rows; Langfuse keeps working unchanged because the graph calls the same `TracedProvider` wrappers (each fix appears as another `extraction` observation with a higher attempt number).
+
+## 9. Repo-polish: removed the n8n alert workflow to keep scope on the core product
+
+- Context: the repo is now focused on a single submission; the ops workflow pulled in an unrelated company name, extra env vars, and docs surface that distract from the product.
+- Choice: deleted the ops alert workflow file (whole `ops/` folder went with it), the compose `n8n` service + volume, the four n8n-only `.env.example` vars, and every README reference. Verified first that no app code, test, or CI job imports those vars. Entry 7 above marked superseded, not edited.
+- Alternatives: renaming the file (rejected: keeps the scope creep, just relabeled).
+- Consequences: `docker-compose.yml` is Postgres-only again; README has no ops section; no other-company references remain anywhere tracked.
+
+## 10. Repo-polish: secret-hygiene verdict (clean, nothing to rotate)
+
+- Context: pre-submission proof that no key ever leaked.
+- Choice: audited `.env` status (gitignored, untracked, absent from all history), scanned tree + full history for key patterns (`AIza…`, `sk-…`, `xox…`, password-bearing URLs, private keys) — zero hits. Sole history match is the empty `N8N_ENCRYPTION_KEY=` placeholder in `.env.example`. Dummy `tracker:tracker` local defaults are intentional and consistent.
+- Alternatives: history rewrite (rejected: nothing leaked, so no rewrite — stated explicitly so the absence is on record).
+- Consequences: no rotation needed; `.env` stays local-only.

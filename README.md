@@ -4,8 +4,7 @@ Customers increasingly discover products through AI answers, not search-result
 pages — and brands have no idea when those answers stop recommending them.
 This tracker measures exactly that: give it a brand, its competitors, and a
 set of prompts, and it records how often AI models mention or cite each brand,
-turning the results into a share-of-voice dashboard over time. When visibility
-drops, a daily ops workflow writes the alert for you.
+turning the results into a share-of-voice dashboard over time.
 
 ## Tech stack
 
@@ -15,7 +14,6 @@ drops, a daily ops workflow writes the alert for you.
 | Backend | Python 3.12+, FastAPI (async), Pydantic v2 |
 | Database | PostgreSQL (SQLAlchemy 2.0 async + Alembic) |
 | Agentic extraction | LangGraph reflection loop (extract → validate → fix) |
-| Ops automation | Self-hosted n8n daily alert workflow |
 | Observability | Langfuse tracing on every LLM call |
 | LLM providers | Gemini (primary, free tier) + OpenAI-compatible endpoints |
 
@@ -30,13 +28,6 @@ rules the model can't corrupt: `is_target_brand` is computed, not extracted,
 and citation domains are normalized locally. Full diagram and node reference:
 [docs/langgraph_architecture.md](docs/langgraph_architecture.md).
 
-**Ops alert workflow.** A versioned n8n workflow (`ops/kuku_alert_workflow.json`)
-runs daily: cron trigger → `GET /brands/{id}/share-of-voice` → a Code node
-reducing the trend to facts (latest share, delta vs previous run, top
-competitor) → an LLM node writing a 2-sentence Slack alert → Slack. Import it
-via the n8n UI and connect your own keys; see the
-[ops section](#ops-automation-n8n) below.
-
 ## Key endpoints
 
 | Method | Path | Description |
@@ -50,20 +41,13 @@ via the n8n UI and connect your own keys; see the
 
 All errors share one envelope: `{"error": {"code", "message", "details"}}`.
 
-## Screenshots
-
-![Runs list](docs/screenshots/runs-list.png)
-![New run form](docs/screenshots/new-run-form.png)
-![Brand dashboard](docs/screenshots/brand-dashboard.png)
-
 ## Quickstart (local development)
 
 Prerequisites: Docker, Python 3.12+, Node 22+.
 
 ```powershell
 Copy-Item .env.example .env
-# Fill in LLM keys in .env, then generate the n8n key:
-# (a random 64-hex-char string for N8N_ENCRYPTION_KEY)
+# Fill in LLM keys in .env, then:
 docker compose up -d db
 cd backend
 ..\.venv\Scripts\Activate.ps1
@@ -72,9 +56,32 @@ alembic upgrade head
 uvicorn app.main:app --reload   # backend on http://localhost:8000
 ```
 
+macOS/Linux equivalent:
+
+```bash
+cp .env.example .env
+# Fill in LLM keys in .env, then:
+docker compose up -d db
+cd backend
+source ../.venv/bin/activate
+pip install ".[test]"
+alembic upgrade head
+uvicorn app.main:app --reload   # backend on http://localhost:8000
+```
+
 Frontend (new terminal):
 
 ```powershell
+cd frontend
+# create .env.local with: NEXT_PUBLIC_API_URL=http://localhost:8000
+npm install
+npm run dev                    # UI on http://localhost:3000
+```
+
+macOS/Linux equivalent (same commands; only the `.env.local` step differs in
+how you create the file):
+
+```bash
 cd frontend
 # create .env.local with: NEXT_PUBLIC_API_URL=http://localhost:8000
 npm install
@@ -104,15 +111,6 @@ dumps stored responses to CSV, you hand-label brands/URLs, and
 rank-match rate. Latest numbers: [docs/METRICS.md](docs/METRICS.md)
 (currently awaiting the first labeled run — see the workflow in
 [docs/DECISIONS.md](docs/DECISIONS.md)).
-
-## Ops automation (n8n)
-
-`docker compose up -d n8n` starts self-hosted n8n at `http://localhost:5678`
-(data persists in the `n8n_data` volume). Import `ops/kuku_alert_workflow.json`
-via **Workflows → … → Import from File**, set `API_BASE_URL` /
-`VISIBILITY_BRAND_ID` in `.env`, connect your OpenAI and Slack credentials on
-the respective nodes, **Execute workflow** once to verify, then flip the
-**Active** toggle.
 
 ## Deployment (free tier, no credit card)
 

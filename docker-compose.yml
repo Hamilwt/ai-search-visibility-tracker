@@ -11,22 +11,5 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
-  n8n:
-    image: docker.n8n.io/n8nio/n8n:1.123.27
-    restart: unless-stopped
-    ports:
-      - "5678:5678"
-    environment:
-      N8N_HOST: ${N8N_HOST:-localhost}
-      N8N_PORT: 5678
-      N8N_PROTOCOL: http
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?Set N8N_ENCRYPTION_KEY in .env}
-      API_BASE_URL: ${API_BASE_URL:-http://host.docker.internal:8000}
-      VISIBILITY_BRAND_ID: ${VISIBILITY_BRAND_ID:-1}
-      TZ: ${TZ:-Asia/Kolkata}
-    volumes:
-      - n8n_data:/home/node/.n8n
-
 volumes:
   pgdata:
-  n8n_data:
