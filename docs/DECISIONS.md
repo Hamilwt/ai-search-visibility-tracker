@@ -86,7 +86,7 @@ One short entry per non-obvious architectural decision: context, choice, alterna
 ## 9. Repo-polish: removed the n8n alert workflow to keep scope on the core product
 
 - Context: the repo is now focused on a single submission; the ops workflow pulled in an unrelated company name, extra env vars, and docs surface that distract from the product.
-- Choice: deleted `ops/kuku_alert_workflow.json` (whole `ops/` folder went with it), the compose `n8n` service + volume, the four n8n-only `.env.example` vars, and every README/docs reference. Verified first that no app code, test, or CI job imports those vars. Entry 7 above marked superseded, not edited.
+- Choice: deleted the ops alert workflow file (whole `ops/` folder went with it), the compose `n8n` service + volume, the four n8n-only `.env.example` vars, and every README reference. Verified first that no app code, test, or CI job imports those vars. Entry 7 above marked superseded, not edited.
 - Alternatives: renaming the file (rejected: keeps the scope creep, just relabeled).
 - Consequences: `docker-compose.yml` is Postgres-only again; README has no ops section; no other-company references remain anywhere tracked.
 

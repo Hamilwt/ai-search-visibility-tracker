@@ -41,12 +41,6 @@ and citation domains are normalized locally. Full diagram and node reference:
 
 All errors share one envelope: `{"error": {"code", "message", "details"}}`.
 
-## Screenshots
-
-![Runs list](docs/screenshots/runs-list.png)
-![New run form](docs/screenshots/new-run-form.png)
-![Brand dashboard](docs/screenshots/brand-dashboard.png)
-
 ## Quickstart (local development)
 
 Prerequisites: Docker, Python 3.12+, Node 22+.
