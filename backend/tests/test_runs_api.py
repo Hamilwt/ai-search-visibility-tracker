@@ -176,7 +176,8 @@ async def test_get_run_not_found_is_enveloped_404(client) -> None:
 async def test_failed_extraction_still_completes_run(client, monkeypatch) -> None:
     http, factory = client
     brand_id = await seed_brand(factory)
-    script(monkeypatch, ["some answer", "garbage one", "garbage two"])
+    # v2 reflection budget: 1 answer + initial extract + 2 fixes, all garbage.
+    script(monkeypatch, ["some answer", "garbage one", "garbage two", "garbage three"])
 
     run_id = (
         await http.post("/runs", json={"brand_id": brand_id, "prompts": ["best widgets?"]})
