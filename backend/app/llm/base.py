@@ -3,12 +3,22 @@ from dataclasses import dataclass
 
 
 @dataclass
+class Usage:
+    """Token counts for one call. All optional: SDKs may omit them."""
+
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    total_tokens: int | None = None
+
+
+@dataclass
 class LLMResult:
     """Uniform result from any provider."""
 
     text: str
     model_name: str
     latency_ms: int
+    usage: Usage | None = None
 
 
 class BaseLLMProvider(ABC):
