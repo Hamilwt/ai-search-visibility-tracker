@@ -44,11 +44,13 @@ def extraction_json() -> str:
 
 
 @pytest.fixture
-async def client():
+async def client(monkeypatch):
     # Separate test database only; the dev database is never touched here.
     await recreate_test_database()
     os.environ["DATABASE_URL"] = TEST_URL
     await asyncio.to_thread(command.upgrade, alembic_config(), "head")
+    # API tests run untraced: force Langfuse disabled even when keys exist.
+    monkeypatch.setattr("app.services.pipeline.get_langfuse_client", lambda s: None)
     engine = create_async_engine(TEST_URL)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     # Mirror app lifespan: the background pipeline uses SessionLocal directly,

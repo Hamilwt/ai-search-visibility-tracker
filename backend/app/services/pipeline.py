@@ -3,6 +3,9 @@
 Runs after the 202 response is sent, with its own database session.
 """
 
+import asyncio
+import uuid
+from contextlib import suppress
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -10,8 +13,11 @@ from sqlalchemy import select
 from app.db import SessionLocal
 from app.llm.extractor import Extractor
 from app.llm.factory import get_provider
+from app.llm.settings import get_settings
+from app.llm.tracing import TracedProvider
 from app.models.brand import Brand, Competitor, Prompt
 from app.models.run import Citation, Mention, Response, Run
+from app.observability.client import get_langfuse_client
 
 
 async def execute_run(run_id: int, prompt_ids: list[int], provider_name: str) -> None:
@@ -40,13 +46,36 @@ async def execute_run(run_id: int, prompt_ids: list[int], provider_name: str) ->
         }
 
         provider = get_provider(provider_name)
-        extractor = Extractor(provider)
+        settings = get_settings()
+        langfuse_client = get_langfuse_client(settings)
+        trace_id = uuid.uuid4().hex if langfuse_client is not None else ""
         try:
             for prompt_id in prompt_ids:
                 prompt = prompts_by_id.get(prompt_id)
                 if prompt is None:
                     continue
-                generated = await provider.generate(prompt.query_text)
+                answer_traced = TracedProvider(
+                    provider,
+                    langfuse_client,
+                    trace_id=trace_id,
+                    run_id=run.id,
+                    brand_id=brand.id,
+                    prompt_id=prompt.id,
+                    provider_name=provider_name,
+                    call_kind="answer",
+                )
+                extraction_traced = TracedProvider(
+                    provider,
+                    langfuse_client,
+                    trace_id=trace_id,
+                    run_id=run.id,
+                    brand_id=brand.id,
+                    prompt_id=prompt.id,
+                    provider_name=provider_name,
+                    call_kind="extraction",
+                )
+                extractor = Extractor(extraction_traced)
+                generated = await answer_traced.generate(prompt.query_text)
                 extracted = await extractor.extract(
                     generated.text,
                     brand.name,
@@ -87,3 +116,8 @@ async def execute_run(run_id: int, prompt_ids: list[int], provider_name: str) ->
             run.status = "failed"
             run.error_message = f"{type(exc).__name__}: {exc}"
         await session.commit()
+        # Observability must never fail the run: flush in a thread so a slow
+        # or unreachable Langfuse endpoint can't block the worker either.
+        if langfuse_client is not None:
+            with suppress(Exception):
+                await asyncio.to_thread(langfuse_client.flush)

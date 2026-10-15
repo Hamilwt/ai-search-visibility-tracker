@@ -2,7 +2,7 @@ import time
 
 import openai
 
-from app.llm.base import BaseLLMProvider, LLMResult
+from app.llm.base import BaseLLMProvider, LLMResult, Usage
 from app.llm.errors import (
     LLMAPIError,
     LLMConfigurationError,
@@ -38,7 +38,7 @@ class OpenAIProvider(BaseLLMProvider):
     async def generate(self, prompt: str) -> LLMResult:
         started = time.perf_counter()
 
-        async def _call() -> str:
+        async def _call() -> tuple[str, Usage | None]:
             try:
                 response = await self._client.chat.completions.create(
                     model=self._model,
@@ -49,11 +49,18 @@ class OpenAIProvider(BaseLLMProvider):
             text = response.choices[0].message.content
             if not text:
                 raise LLMAPIError("OpenAI-compatible endpoint returned empty content")
-            return text
+            usage = None
+            if response.usage is not None:
+                usage = Usage(
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    total_tokens=response.usage.total_tokens,
+                )
+            return text, usage
 
-        text = await run_guarded(_call, self._settings)
+        text, usage = await run_guarded(_call, self._settings)
         latency_ms = int((time.perf_counter() - started) * 1000)
-        return LLMResult(text=text, model_name=self._model, latency_ms=latency_ms)
+        return LLMResult(text=text, model_name=self._model, latency_ms=latency_ms, usage=usage)
 
     @staticmethod
     def _translate(exc: openai.OpenAIError) -> LLMError:

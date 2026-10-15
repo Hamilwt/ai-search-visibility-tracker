@@ -3,7 +3,7 @@ import time
 from google import genai
 from google.genai import errors as genai_errors
 
-from app.llm.base import BaseLLMProvider, LLMResult
+from app.llm.base import BaseLLMProvider, LLMResult, Usage
 from app.llm.errors import (
     LLMAPIError,
     LLMConfigurationError,
@@ -33,7 +33,7 @@ class GeminiProvider(BaseLLMProvider):
     async def generate(self, prompt: str) -> LLMResult:
         started = time.perf_counter()
 
-        async def _call() -> str:
+        async def _call() -> tuple[str, Usage | None]:
             try:
                 response = await self._client.aio.models.generate_content(
                     model=self._model, contents=prompt
@@ -42,11 +42,25 @@ class GeminiProvider(BaseLLMProvider):
                 raise self._translate(exc) from exc
             if not response.text:
                 raise LLMAPIError("Gemini returned an empty response")
-            return response.text
+            return response.text, self._usage_of(response)
 
-        text = await run_guarded(_call, self._settings)
+        text, usage = await run_guarded(_call, self._settings)
         latency_ms = int((time.perf_counter() - started) * 1000)
-        return LLMResult(text=text, model_name=self._model, latency_ms=latency_ms)
+        return LLMResult(text=text, model_name=self._model, latency_ms=latency_ms, usage=usage)
+
+    @staticmethod
+    def _usage_of(response) -> Usage | None:  # noqa: ANN001
+        meta = getattr(response, "usage_metadata", None)
+        if meta is None:
+            return None
+        completion = getattr(meta, "response_token_count", None)
+        if completion is None:  # older SDK field name
+            completion = getattr(meta, "candidates_token_count", None)
+        return Usage(
+            prompt_tokens=getattr(meta, "prompt_token_count", None),
+            completion_tokens=completion,
+            total_tokens=getattr(meta, "total_token_count", None),
+        )
 
     @staticmethod
     def _translate(exc: genai_errors.APIError) -> LLMError:
