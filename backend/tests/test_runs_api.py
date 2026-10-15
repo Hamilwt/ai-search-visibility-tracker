@@ -102,8 +102,10 @@ async def wait_for_run(http: AsyncClient, run_id: int) -> dict:  # noqa: ANN001
     raise TimeoutError(f"run {run_id} did not finish in time")
 
 
-async def test_post_runs_executes_pipeline(client, monkeypatch) -> None:
+@pytest.mark.parametrize("use_langgraph", [True, False])
+async def test_post_runs_executes_pipeline(client, monkeypatch, use_langgraph: bool) -> None:
     http, factory = client
+    monkeypatch.setattr("app.services.pipeline.USE_LANGGRAPH", use_langgraph)
     brand_id = await seed_brand(factory)
     provider = script(monkeypatch, ["Acme is the best widget", extraction_json()])
 
@@ -176,7 +178,8 @@ async def test_get_run_not_found_is_enveloped_404(client) -> None:
 async def test_failed_extraction_still_completes_run(client, monkeypatch) -> None:
     http, factory = client
     brand_id = await seed_brand(factory)
-    script(monkeypatch, ["some answer", "garbage one", "garbage two"])
+    # v2 reflection budget: 1 answer + initial extract + 2 fixes, all garbage.
+    script(monkeypatch, ["some answer", "garbage one", "garbage two", "garbage three"])
 
     run_id = (
         await http.post("/runs", json={"brand_id": brand_id, "prompts": ["best widgets?"]})

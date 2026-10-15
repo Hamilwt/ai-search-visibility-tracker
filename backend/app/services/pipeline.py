@@ -4,12 +4,14 @@ Runs after the 202 response is sent, with its own database session.
 """
 
 import asyncio
+import os
 import uuid
 from contextlib import suppress
 from datetime import UTC, datetime
 
 from sqlalchemy import select
 
+from app.agents.extraction_graph import build_extraction_graph, run_extraction
 from app.db import SessionLocal
 from app.llm.extractor import Extractor
 from app.llm.factory import get_provider
@@ -18,6 +20,9 @@ from app.llm.tracing import TracedProvider
 from app.models.brand import Brand, Competitor, Prompt
 from app.models.run import Citation, Mention, Response, Run
 from app.observability.client import get_langfuse_client
+
+# v2 reflection graph is the primary path; "0" restores the v1 Extractor.
+USE_LANGGRAPH = os.getenv("USE_EXTRACTION_V2", "1") != "0"
 
 
 async def execute_run(run_id: int, prompt_ids: list[int], provider_name: str) -> None:
@@ -75,12 +80,16 @@ async def execute_run(run_id: int, prompt_ids: list[int], provider_name: str) ->
                     call_kind="extraction",
                 )
                 extractor = Extractor(extraction_traced)
+                graph = build_extraction_graph(extraction_traced) if USE_LANGGRAPH else None
                 generated = await answer_traced.generate(prompt.query_text)
-                extracted = await extractor.extract(
-                    generated.text,
-                    brand.name,
-                    competitors,
-                )
+                if graph is not None:
+                    extracted = await run_extraction(graph, generated.text, brand.name, competitors)
+                else:
+                    extracted = await extractor.extract(
+                        generated.text,
+                        brand.name,
+                        competitors,
+                    )
                 response = Response(
                     run_id=run.id,
                     prompt_id=prompt.id,
