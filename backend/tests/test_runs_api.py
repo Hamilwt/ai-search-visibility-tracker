@@ -102,8 +102,10 @@ async def wait_for_run(http: AsyncClient, run_id: int) -> dict:  # noqa: ANN001
     raise TimeoutError(f"run {run_id} did not finish in time")
 
 
-async def test_post_runs_executes_pipeline(client, monkeypatch) -> None:
+@pytest.mark.parametrize("use_langgraph", [True, False])
+async def test_post_runs_executes_pipeline(client, monkeypatch, use_langgraph: bool) -> None:
     http, factory = client
+    monkeypatch.setattr("app.services.pipeline.USE_LANGGRAPH", use_langgraph)
     brand_id = await seed_brand(factory)
     provider = script(monkeypatch, ["Acme is the best widget", extraction_json()])
 
