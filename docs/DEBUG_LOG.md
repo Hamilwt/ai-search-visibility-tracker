@@ -57,3 +57,10 @@ Log every real bug or failure hit during development: symptom, log/trace evidenc
 - Root cause: timestamp columns relied on annotation-inferred `DateTime` (naive) while the migration created `TIMESTAMPTZ`; writing `datetime.now(UTC)` through a naive-typed column broke asyncpg encoding. Phase 1 tests never wrote Python-side datetimes, so it slipped through.
 - Fix: explicit `DateTime(timezone=True)` on all five timestamp columns (`fix: declare timezone on timestamp columns`).
 - Prevention: always declare temporal column types explicitly; never rely on annotation inference for types with variants.
+
+## 9. Export smoke test failed: dev database was never migrated
+
+- Symptom: `scripts/export_for_labels.py` raised `UndefinedTableError: relation "responses" does not exist` against the dev `visibility` database.
+- Root cause: migrations had only ever run against `visibility_test` inside pytest; the dev database was created empty by `docker compose` and never upgraded. Script and query were correct.
+- Fix: ran `alembic upgrade head` with `DATABASE_URL` pointed at the dev database (no code change).
+- Prevention: after `docker compose up -d db` on a fresh machine, `alembic upgrade head` is a required setup step — now recorded in the hand-labeling workflow.

@@ -36,3 +36,18 @@ One short entry per non-obvious architectural decision: context, choice, alterna
 2. Open Langfuse, filter observations by metadata `run_id = 7` and `prompt_id = 3`.
 3. Three generations appear in order: `answer` (the raw answer text — check whether the answer itself was thin or refusal-like), `extraction` attempt 1 with `level = ERROR` (read `output`: is it truncated JSON? markdown fences? a wrong schema? — this tells you whether to fix the extraction template or the model choice), `extraction` attempt 2 with `level = ERROR` (read the repair `input` to confirm what the repair prompt sent, and its `output` to see why the fix failed).
 4. Decide: malformed shape → tighten `EXTRACTION_TEMPLATE`/schema; valid JSON but refused content → the answer had nothing to extract (expected `failed_extraction`, not a bug); repeated truncation → raise `LLM_TIMEOUT_S` or shorten prompts.
+
+## 5. Phase 5 evaluation: pure math, thin scripts, owner-labeled truth
+
+- Context: accuracy numbers must be reproducible and attributable, not vibes.
+- Choice: pure comparison functions in `app/eval/metrics.py` (unit-tested, DB-free) with thin `backend/scripts/` CLIs for export and scoring; `Name@rank` label syntax; micro-averaged precision/recall (30 rows can't support per-brand metrics); divide-by-zero prints `n/a`; sentiment explicitly out of scope for v1.
+- Alternatives: scoring logic embedded in the script (rejected: untestable without a database); per-brand metrics (rejected: meaningless confidence intervals at n=30).
+- Consequences: `export → hand-label → evaluate → paste block into docs/METRICS.md` is the only path numbers enter the repo.
+
+## Hand-labeling workflow (for the owner)
+
+1. `cd backend` and ensure the dev database is migrated: `alembic upgrade head`.
+2. `python scripts/export_for_labels.py --limit 30 --out labels/labeled_30.csv` (latest `success` responses only).
+3. Fill `expected_brands` (`Acme@1;Umbrella@2`) and `expected_urls` (`https://…;https://…`) in the CSV.
+4. `python scripts/evaluate.py --labels labels/labeled_30.csv` prints the metrics block.
+5. Append the printed block verbatim to `docs/METRICS.md`. Never hand-edit the numbers.
