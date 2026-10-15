@@ -1,0 +1,101 @@
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.api.schemas import (
+    CitationOut,
+    MentionOut,
+    ResponseOut,
+    RunCreateRequest,
+    RunCreateResponse,
+    RunDetailOut,
+)
+from app.db import get_session
+from app.models.brand import Brand, Prompt
+from app.models.run import Response, Run
+from app.services.pipeline import execute_run
+
+router = APIRouter(tags=["runs"])
+
+
+async def _upsert_prompts(session: AsyncSession, brand_id: int, queries: list[str]) -> list[int]:
+    existing = {
+        prompt.query_text: prompt
+        for prompt in await session.scalars(
+            select(Prompt).where(Prompt.brand_id == brand_id, Prompt.query_text.in_(queries))
+        )
+    }
+    ordered_ids: list[int] = []
+    for query in queries:
+        prompt = existing.get(query)
+        if prompt is None:
+            prompt = Prompt(brand_id=brand_id, query_text=query)
+            session.add(prompt)
+            await session.flush()
+            existing[query] = prompt
+        elif not prompt.is_active:
+            prompt.is_active = True
+        ordered_ids.append(prompt.id)
+    return ordered_ids
+
+
+@router.post("/runs", response_model=RunCreateResponse, status_code=202)
+async def create_run(
+    request: RunCreateRequest,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_session),
+) -> RunCreateResponse:
+    brand = await session.get(Brand, request.brand_id)
+    if brand is None:
+        raise HTTPException(status_code=404, detail=f"Brand {request.brand_id} not found")
+    prompt_ids = await _upsert_prompts(session, brand.id, request.prompts)
+    run = Run(brand_id=brand.id, status="pending")
+    session.add(run)
+    await session.flush()
+    await session.commit()
+    background_tasks.add_task(execute_run, run.id, prompt_ids, request.provider)
+    return RunCreateResponse(run_id=run.id, status="pending")
+
+
+@router.get("/runs/{run_id}", response_model=RunDetailOut)
+async def get_run(run_id: int, session: AsyncSession = Depends(get_session)) -> RunDetailOut:
+    run = await session.get(Run, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+    responses = list(
+        await session.scalars(
+            select(Response)
+            .where(Response.run_id == run.id)
+            .options(selectinload(Response.mentions), selectinload(Response.citations))
+            .order_by(Response.id)
+        )
+    )
+    prompts = {
+        prompt.id: prompt
+        for prompt in await session.scalars(
+            select(Prompt).where(Prompt.id.in_([response.prompt_id for response in responses]))
+        )
+    }
+    return RunDetailOut(
+        id=run.id,
+        brand_id=run.brand_id,
+        status=run.status,
+        triggered_at=run.triggered_at,
+        completed_at=run.completed_at,
+        error_message=run.error_message,
+        responses=[
+            ResponseOut(
+                id=response.id,
+                prompt_id=response.prompt_id,
+                query_text=prompts[response.prompt_id].query_text,
+                raw_response=response.raw_response,
+                model_name=response.model_name,
+                latency_ms=response.latency_ms,
+                status=response.status,
+                mentions=[MentionOut.model_validate(m) for m in response.mentions],
+                citations=[CitationOut.model_validate(c) for c in response.citations],
+            )
+            for response in responses
+        ],
+    )

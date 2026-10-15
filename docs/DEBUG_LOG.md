@@ -29,3 +29,31 @@ Log every real bug or failure hit during development: symptom, log/trace evidenc
 - Root cause: setuptools auto-discovery treated the `alembic/` migrations directory as a distributable package alongside `app/`.
 - Fix: added `[tool.setuptools.packages.find] include = ["app*"]` to `backend/pyproject.toml` so only the app is packaged; migrations stay as scripts.
 - Prevention: dry-run `pip install --dry-run "./backend[test]"` locally before changing the CI install step.
+
+## 5. Unmatched-path 404s bypassed the error envelope
+
+- Symptom: `GET /nope` returned FastAPI's default `{"detail": "Not Found"}` instead of the unified envelope.
+- Root cause: router 404s raise Starlette's `HTTPException`, but the handler was registered for FastAPI's subclass; Starlette matches handlers up the exception's MRO, never down to subclasses.
+- Fix: register the handler for `starlette.exceptions.HTTPException`, which also covers FastAPI's subclass.
+- Prevention: smoke-test an unknown path (not just a known route's 404) when adding error handlers.
+
+## 6. `add_exception_handler(Exception, ...)` never fires under test transport
+
+- Symptom: a route raising `RuntimeError` propagated out of `httpx.ASGITransport` instead of returning the enveloped 500.
+- Root cause: read FastAPI's `build_middleware_stack`: handlers keyed `Exception` (or `500`) are diverted to `ServerErrorMiddleware`, which sends the response and then always re-raises; `httpx` with default `raise_app_exceptions=True` surfaces the raise. Production behavior was correct (enveloped 500 on the wire); only the test view differed.
+- Fix: no app change; test clients use `ASGITransport(raise_app_exceptions=False)` to assert 500 envelopes.
+- Prevention: when testing 500 shapes, set `raise_app_exceptions=False`; read the installed framework's middleware wiring before assuming handler routing.
+
+## 7. Background pipeline stayed `pending` in API tests (unbound session)
+
+- Symptom: `POST /runs` returned 202 but the run never left `pending`; provider fake recorded zero calls.
+- Root cause: `SessionLocal` is bound in app lifespan, which never runs under `ASGITransport`; the background task's first DB access raised `UnboundExecutionError`, swallowed by the transport.
+- Fix: test fixture calls `SessionLocal.configure(bind=test_engine)` (mirroring lifespan) and unbinds in teardown.
+- Prevention: any test touching code paths that use `SessionLocal` directly must bind it; request-scoped `get_session` overrides are not enough.
+
+## 8. `completed_at` update crashed: naive vs aware datetimes
+
+- Symptom: background run stuck at `running`; DBAPIError `invalid input for query argument $2 ... can't subtract offset-naive and offset-aware datetimes` on `UPDATE runs ... completed_at`.
+- Root cause: timestamp columns relied on annotation-inferred `DateTime` (naive) while the migration created `TIMESTAMPTZ`; writing `datetime.now(UTC)` through a naive-typed column broke asyncpg encoding. Phase 1 tests never wrote Python-side datetimes, so it slipped through.
+- Fix: explicit `DateTime(timezone=True)` on all five timestamp columns (`fix: declare timezone on timestamp columns`).
+- Prevention: always declare temporal column types explicitly; never rely on annotation inference for types with variants.

@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    DateTime,
     ForeignKey,
     Index,
     Integer,
@@ -24,8 +25,10 @@ class Run(Base):
         ForeignKey("brands.id", ondelete="CASCADE"), nullable=False
     )
     status: Mapped[str] = mapped_column(nullable=False, server_default="pending")
-    triggered_at: Mapped[datetime] = mapped_column(nullable=False, server_default=func.now())
-    completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    triggered_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
