@@ -64,3 +64,31 @@ Log every real bug or failure hit during development: symptom, log/trace evidenc
 - Root cause: migrations had only ever run against `visibility_test` inside pytest; the dev database was created empty by `docker compose` and never upgraded. Script and query were correct.
 - Fix: ran `alembic upgrade head` with `DATABASE_URL` pointed at the dev database (no code change).
 - Prevention: after `docker compose up -d db` on a fresh machine, `alembic upgrade head` is a required setup step — now recorded in the hand-labeling workflow.
+
+## 10. Next 16 scaffold cannot build on Windows (no Turbopack binaries)
+
+- Symptom: fresh `create-next-app` (Next 16.4.1) failed with `Turbopack is not supported on this platform (win32/x64)`.
+- Root cause: Turbopack native bindings aren't published/installed for this Windows box; only WASM bindings loaded.
+- Fix: downgraded to `next@15` + `eslint-config-next@15` (webpack default), moved Tailwind v4 to `@tailwindcss/postcss` with a `postcss.config.mjs`, dropped 16-only `next.config.ts` keys. Recorded as the reason for Next 15 in DECISIONS entry 6.
+- Prevention: run `npm run build` on the scaffold before writing any code; never assume the latest major builds everywhere.
+
+## 11. Tailwind build failed: missing `lightningcss.win32-x64-msvc.node`
+
+- Symptom: webpack build failed in `next/font` with `Cannot find module '../lightningcss.win32-x64-msvc.node'`.
+- Root cause: npm skipped the platform-specific lightningcss native optional dependency during the churned installs.
+- Fix: explicit `npm install -D lightningcss-win32-x64-msvc`; verified with a clean build.
+- Prevention: when native-binding errors appear after interrupted installs, prefer a fresh `node_modules` + lockfile over incremental installs.
+
+## 12. Scaffold flat ESLint config is legacy format in v15 preset
+
+- Symptom: `npm run lint` failed first with `Cannot find module 'eslint-config-next/core-web-vitals'` (no `exports` map + Node 23 strict ESM), then after adding `.js`, with `nextVitals is not iterable` (file is eslintrc-style, not a flat array).
+- Root cause: `eslint-config-next@15` subpaths are legacy-format configs; the flat-config scaffold template targets v16.
+- Fix: removed `eslint-config-next`, installed `typescript-eslint`, minimal flat config with recommended rules.
+- Prevention: match lint presets to the major version actually installed; read the preset's file format before importing it.
+
+## 13. Recharts Tooltip formatter rejected by `tsc`
+
+- Symptom: `tsc` error: `(value: number | undefined)` not assignable to Recharts `Formatter`.
+- Root cause: annotated the formatter narrower than Recharts' value union (`ValueType` includes strings).
+- Fix: dropped the annotation and let TS infer the parameter from the `Formatter` signature.
+- Prevention: for library callback props, omit annotations and let inference satisfy the declared type.

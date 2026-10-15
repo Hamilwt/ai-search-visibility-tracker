@@ -51,3 +51,16 @@ One short entry per non-obvious architectural decision: context, choice, alterna
 3. Fill `expected_brands` (`Acme@1;Umbrella@2`) and `expected_urls` (`https://…;https://…`) in the CSV.
 4. `python scripts/evaluate.py --labels labels/labeled_30.csv` prints the metrics block.
 5. Append the printed block verbatim to `docs/METRICS.md`. Never hand-edit the numbers.
+
+## 6. Phase 6 frontend: Client Components only, typed client, two new list endpoints
+
+- Context: owner new to React; pages need brand/run lists the backend didn't expose.
+- Choice: all-Client-Components v1 (one mental model: state + `useEffect` fetching); `lib/types.ts` hand-mirrored from Pydantic schemas with `tsc` catching drift; one `api.ts` translating the error envelope into thrown `ApiError`; tiny backend addition (`GET /brands`, `GET /runs` with grouped join) instead of frontend workarounds; Next.js 15 (not the scaffold's 16 — Turbopack has no Windows binaries here) with Tailwind v4 via PostCSS; `typescript-eslint` flat config (the v15 Next preset ships legacy format).
+- Alternatives: Server Components/fetch-on-server (rejected: two mental models while learning); localStorage run ids instead of list endpoints (rejected: hacky, breaks across browsers); Next 16 defaults (rejected: doesn't build on this machine).
+- Consequences: every fetch has loading/error/empty states; `npm run lint` + `npm run build` gate each commit and run in CI.
+
+## Frontend local run (for the owner)
+
+1. Backend: `docker compose up -d db`, `cd backend`, `..\.venv\Scripts\Activate.ps1`, `uvicorn app.main:app --reload` (port 8000).
+2. Frontend: `cd frontend`, create `.env.local` with `NEXT_PUBLIC_API_URL=http://localhost:8000`, `npm install`, `npm run dev`, open `http://localhost:3000`.
+3. Click through: runs list (empty state first) → New run → back to list → brand dashboard chart.
