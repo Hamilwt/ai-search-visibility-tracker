@@ -1,11 +1,29 @@
 {
-  "name": "ai-search-visibility-tracker-frontend",
+  "name": "frontend",
   "version": "0.1.0",
   "private": true,
-  "description": "Frontend placeholder. Full Next.js App Router + TypeScript + Recharts app lands in Phase 6.",
   "scripts": {
-    "dev": "echo \"frontend placeholder: Next.js app lands in Phase 6\"",
-    "build": "echo \"frontend placeholder: Next.js app lands in Phase 6\"",
-    "lint": "echo \"frontend placeholder: Next.js app lands in Phase 6\""
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "next": "^15.5.28",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "recharts": "^3.10.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@tailwindcss/turbopack": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "lightningcss-win32-x64-msvc": "^1.33.0",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "typescript-eslint": "^8.71.2"
   }
 }
