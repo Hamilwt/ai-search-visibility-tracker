@@ -32,6 +32,23 @@ class RunCreateResponse(BaseModel):
     status: RunStatus
 
 
+class BrandOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+
+
+class RunSummaryOut(BaseModel):
+    id: int
+    brand_id: int
+    brand_name: str
+    status: str
+    triggered_at: datetime
+    completed_at: datetime | None
+    response_count: int
+
+
 class MentionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

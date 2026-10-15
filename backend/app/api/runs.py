@@ -1,5 +1,5 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -10,6 +10,7 @@ from app.api.schemas import (
     RunCreateRequest,
     RunCreateResponse,
     RunDetailOut,
+    RunSummaryOut,
 )
 from app.db import get_session
 from app.models.brand import Brand, Prompt
@@ -17,6 +18,36 @@ from app.models.run import Response, Run
 from app.services.pipeline import execute_run
 
 router = APIRouter(tags=["runs"])
+
+
+@router.get("/runs", response_model=list[RunSummaryOut])
+async def list_runs(
+    brand_id: int | None = None,
+    limit: int = Query(default=20, gt=0, le=100),
+    session: AsyncSession = Depends(get_session),
+) -> list[RunSummaryOut]:
+    stmt = (
+        select(Run, Brand.name, func.count(Response.id))
+        .join(Brand, Brand.id == Run.brand_id)
+        .outerjoin(Response, Response.run_id == Run.id)
+        .group_by(Run.id, Brand.name)
+        .order_by(Run.id.desc())
+        .limit(limit)
+    )
+    if brand_id is not None:
+        stmt = stmt.where(Run.brand_id == brand_id)
+    return [
+        RunSummaryOut(
+            id=run.id,
+            brand_id=run.brand_id,
+            brand_name=brand_name,
+            status=run.status,
+            triggered_at=run.triggered_at,
+            completed_at=run.completed_at,
+            response_count=count,
+        )
+        for run, brand_name, count in await session.execute(stmt)
+    ]
 
 
 async def _upsert_prompts(session: AsyncSession, brand_id: int, queries: list[str]) -> list[int]:
