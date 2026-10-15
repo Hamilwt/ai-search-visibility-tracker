@@ -71,3 +71,10 @@ One short entry per non-obvious architectural decision: context, choice, alterna
 - Choice: Render free web service from `render.yaml` (migrations via `preDeployCommand`, `/health` check) with the database on Neon (pooled URL, `sslmode=require`) instead of Render Postgres (90-day deletion risk); n8n self-hosted beside Postgres with default SQLite storage; workflow as versioned JSON using `$env` inputs so one file works on any machine; Vercel by dashboard instructions (auto-detects Next.js, no config file to drift).
 - Alternatives: Render Postgres (rejected: expiry risk); n8n on our Postgres (rejected: couples ops tooling to product DB); `vercel.json` (rejected: duplicates dashboard settings).
 - Consequences: `docker compose up -d n8n` + UI import is the whole local ops demo; live URLs get pasted into the README after first deploy.
+
+## 8. Phase 8 LangGraph v2: reflection graph as primary extraction path
+
+- Context: showcase multi-step agentic reasoning with a critique loop, without breaking the working pipeline.
+- Choice: `StateGraph` with `TypedDict` blackboard (`raw_attempt`, `attempts`, `validation_error`, `result`); three nodes reusing v1's templates and `_parse` verbatim (no duplicated validation); conditional edge `validate → END | fix` with budget initial + 2 fixes; v2 ON by default behind `USE_EXTRACTION_V2=0` opt-out; mermaid diagram generated from the compiled graph by a checked-in script.
+- Alternatives: LangChain `LLMChain` + manual loop (rejected: control flow hidden in Python, nothing to visualize); separate v2 pipeline module (rejected: duplicated DB logic); v1 default with v2 opt-in (rejected: the point of the phase is showcasing the agent).
+- Consequences: every extraction is now traceable as extract → validate → fix hops; existing tests parametrized over v1/v2 prove identical stored rows; Langfuse keeps working unchanged because the graph calls the same `TracedProvider` wrappers (each fix appears as another `extraction` observation with a higher attempt number).
