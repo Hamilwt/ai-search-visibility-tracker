@@ -1,0 +1,36 @@
+# Render Blueprint: FastAPI backend (free tier).
+# Database lives on Neon (see README); paste its URL in the dashboard.
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: visibility-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install .
+    preDeployCommand: alembic upgrade head
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false # Neon pooled URL, e.g. postgresql+asyncpg://user:pass@host/db?sslmode=require
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_BASE_URL
+        sync: false
+      - key: OPENAI_MODEL
+        sync: false
+      - key: LLM_TIMEOUT_S
+        value: 60
+      - key: MAX_CONCURRENT_LLM_CALLS
+        value: 5
+      - key: LANGFUSE_HOST
+        sync: false
+      - key: LANGFUSE_PUBLIC_KEY
+        sync: false
+      - key: LANGFUSE_SECRET_KEY
+        sync: false
