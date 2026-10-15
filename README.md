@@ -121,10 +121,22 @@ Live URLs live here once deployed:
 - Frontend: _pending_
 
 - **Backend → Render:** New → Blueprint from this repo (`render.yaml`: free web
-  service, `alembic upgrade head` pre-deploy, `/health` check). Fill secrets in
-  the dashboard, starting with `DATABASE_URL`.
-- **Database → Neon:** free project at neon.tech; use the **pooled** URL with
-  scheme `postgresql+asyncpg://` and `?sslmode=require`.
+  service, `alembic upgrade head` pre-deploy, `/health` check). Fill the
+  dashboard values, starting with `DATABASE_URL`. Required names (never commit
+  values): `DATABASE_URL`, `DIRECT_DATABASE_URL`, `CORS_ORIGINS`,
+  `MAX_PROMPTS_PER_RUN`, `MAX_RUNS_PER_HOUR_PER_IP`, `GEMINI_API_KEY`,
+  `GEMINI_MODEL`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`,
+  `LLM_TIMEOUT_S`, `MAX_CONCURRENT_LLM_CALLS`, `LANGFUSE_HOST`,
+  `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL`,
+  `USE_EXTRACTION_V2`.
+- **Database → Neon:** free project at neon.tech. Copy **two** URLs from the
+  Connect modal: the **pooled** URL (`-pooler` host) goes into `DATABASE_URL`
+  for the app; the **direct** URL goes into `DIRECT_DATABASE_URL` for
+  migrations (Neon's PgBouncer rejects migration-style statements, so Alembic
+  prefers the direct URL automatically). Paste either URL exactly as Neon
+  gives it — the app normalises the scheme and drops params asyncpg rejects.
+  Manual/one-time migration from `backend/`:
+  `DIRECT_DATABASE_URL=postgresql://user:pass@host/db?sslmode=require alembic upgrade head`.
 - **Frontend → Vercel:** import the repo with **Root Directory** `frontend`,
   set `NEXT_PUBLIC_API_URL` to the Render backend URL, deploy.
 
