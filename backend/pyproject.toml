@@ -1,0 +1,33 @@
+[project]
+name = "ai-search-visibility-tracker-backend"
+version = "0.1.0"
+description = "Backend for AI Search Visibility Tracker"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.143.1",
+    "uvicorn>=0.54.0",
+    "pydantic>=2.14.1",
+    "httpx>=0.28.1",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "httpx>=0.28.1",
+]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
