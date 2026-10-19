@@ -115,8 +115,8 @@ rank-match rate. Latest numbers: [docs/METRICS.md](docs/METRICS.md)
 ## Deployment (free tier, no credit card)
 
 Live URLs live here once deployed:
-- Backend: _pending_
-- Frontend: _pending_
+- Backend: [(https://visibility-backend.onrender.com/)](https://visibility-backend.onrender.com/)
+- Frontend: [(https://ai-search-visibility-tracker-9ihm-in00h558t-hamil3.vercel.app/)](https://ai-search-visibility-tracker-9ihm-in00h558t-hamil3.vercel.app/)
 
 - **Backend → Render:** New → Blueprint from this repo (`render.yaml`: free web
   service, `alembic upgrade head` pre-deploy, `/health` check). Fill the
